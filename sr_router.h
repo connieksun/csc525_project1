@@ -14,6 +14,7 @@
 #include <stdio.h>
 
 #include "sr_protocol.h"
+#include "sr_router_helper.h"
 #ifdef VNL
 #include "vnlconn.h"
 #endif
@@ -31,6 +32,10 @@
 
 #define INIT_TTL 255
 #define PACKET_DUMP_SIZE 1024
+
+#define SWAP_UINT16(x) (((x) >> 8) |((x) << 8))
+#define SWAP_UINT32(x) (((x) >> 24) | (((x) & 0x00FF0000) >> 8) | (((x) & 0x0000FF00) << 8) | ((x) << 24))
+
 
 /* forward declare */
 struct sr_if;
@@ -71,6 +76,9 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
+void sr_printpacket(uint8_t *packet);
+void sr_print_eth_hdr(uint8_t *p);
+void sr_print_arp_hdr(uint8_t *p);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
