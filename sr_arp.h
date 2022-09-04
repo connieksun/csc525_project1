@@ -14,11 +14,4 @@ void sr_send_arp_reply();
 void print_rt_ip(struct sr_instance*);
 void print_if_ip(struct sr_instance*);
 
-struct sr_arp_cache {
-	uint32_t ip_addr;
-	unsigned char phys_addr[ETHER_ADDR_LEN];
-	time_t time_updated;
-	struct sr_arp_cache* next;
-};
-
 #endif /* SR_ARP_H */
