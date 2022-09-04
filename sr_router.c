@@ -12,8 +12,6 @@
  **********************************************************************/
 
 #include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
 #include <assert.h>
 #include <inttypes.h>
 
@@ -37,7 +35,7 @@ void sr_init(struct sr_instance* sr)
 {
     /* REQUIRES */
     assert(sr);
-   sr_init_arp_cache(sr); 
+
     /* Add initialization code here! */
 
 } /* -- sr_init -- */
@@ -193,19 +191,7 @@ void sr_print_arp_hdr(uint8_t * p) {
 }
 
 
-void sr_init_arp_cache(struct sr_instance* sr) {
-	struct sr_if *interface = sr->if_list;
-	struct sr_arp_cache *cache = malloc(sizeof(struct sr_arp_cache));
-	sr->arp_cache = cache;
-	while (interface) {
-		cache->ip_addr = interface->ip;
-		cache->time_updated = 0;
-		cache->next = malloc(sizeof(struct sr_arp_cache));
-		cache = cache->next;
-		interface = interface->next;
-	}
-	free(cache); /* added one more entry than needed */
-}
+
 
 
 
