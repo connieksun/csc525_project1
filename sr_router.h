@@ -62,6 +62,7 @@ struct sr_instance
     struct sockaddr_in sr_addr; /* address to server */
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
+    struct sr_arp_cache* arp_cache; /* arp cache */
     FILE* logfile;
 };
 
@@ -75,6 +76,7 @@ int sr_read_from_server(struct sr_instance* );
 
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
+void sr_init_arp_cache(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
 void sr_handle_arp_packet(struct sr_instance*, uint8_t *);
 void sr_handle_ip_packet(struct sr_instance*, uint8_t *);

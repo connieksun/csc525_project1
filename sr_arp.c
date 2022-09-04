@@ -11,6 +11,7 @@
 #include <inttypes.h>
 #include <netinet/in.h>
 #include <string.h>
+#include <stdlib.h>
 
 
 #include "sr_if.h"
@@ -105,4 +106,41 @@ void print_if_ip(struct sr_instance *sr){
         printf("rt IP: %s\n", ip_addr);
         interface = interface->next;
     }
+}
+
+/*
+ * returns cached ethernet value if fresh, 0 otherwise */
+unsigned char* ether_addr_if_cached(struct sr_instance *sr, uint32_t ip) {
+    	struct sr_arp_cache * cache_entry = sr->arp_cache;
+	struct timeval* current_time = malloc(sizeof(struct timeval));
+	gettimeofday(current_time, NULL); 
+	while (cache_entry) {
+		if (ip == cache_entry->ip_addr) {
+			if ( current_time->tv_sec - cache_entry->time_updated < 10 \
+				       	&& cache_entry->time_updated != 0) {
+				return cache_entry->phys_addr;
+			} else {
+				return 0;
+			}
+		}
+		cache_entry = cache_entry->next;
+	}
+	return 0;
+}
+
+/* updates arp cache with given ethernet address */
+void update_cache_entry(struct sr_instance* sr, uint32_t ip, unsigned char* ether) {
+	struct sr_arp_cache * cache_entry = sr->arp_cache;
+	struct timeval* current_time = malloc(sizeof(struct timeval));
+	while (cache_entry) {
+		if (ip == cache_entry->ip_addr) {
+			gettimeofday(current_time, NULL);
+			memcpy(cache_entry->phys_addr, ether, ETHER_ADDR_LEN);
+			cache_entry->time_updated = current_time->tv_sec;
+			return;
+		}
+		cache_entry = cache_entry->next;
+	}
+	fprintf(stderr, "Error updating cache for IP: %u. IP not found.\n", ip);
+	return;
 }
