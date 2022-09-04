@@ -21,6 +21,7 @@
 #include "sr_router.h"
 #include "sr_protocol.h"
 #include "sr_router_helper.h"
+#include "sr_arp.h"
 
 /*--------------------------------------------------------------------- 
  * Method: sr_init(void)
@@ -69,8 +70,50 @@ void sr_handlepacket(struct sr_instance* sr,
 
     printf("*** -> Received packet of length %d \n",len);
     sr_printpacket(packet);
+    
+    // actual packet handling begins here
+    struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) packet;
+    uint16_t eth_type = SWAP_UINT16(eth_hdr->ether_type);
+    if (eth_type == ETHERTYPE_ARP) {
+        sr_handle_arp_packet(sr, packet);
+    } else if (eth_type == ETHERTYPE_IP) {
+        sr_handle_ip_packet(sr, packet);
+    } else
+        fprintf(stderr, "*** Error: ethertype %02x unknown\n", eth_type);
 
 }/* end sr_ForwardPacket */
+
+
+/*--------------------------------------------------------------------- 
+ * Method: handle_arp_packet(struct sr_ethernet_hdr* p) 
+ * Scope:  Global
+ *
+ * This method is called when the ethernet header is ARP type
+ *
+ *---------------------------------------------------------------------*/
+void sr_handle_arp_packet(struct sr_instance* sr, uint8_t* p){
+    printf("*** handle arp packet\n");
+    struct sr_arphdr* arp_hdr  = (struct sr_arphdr *) (p + sizeof(struct sr_ethernet_hdr));
+    unsigned short opcode = SWAP_UINT16(arp_hdr->ar_op);
+    if (opcode == ARP_REQUEST)
+        sr_handle_arp_request(sr, p, arp_hdr);
+    else if (opcode == ARP_REPLY)
+        sr_handle_arp_reply(sr, p);
+    else
+        fprintf(stderr, "*** Error: sr does not handle ARP op %02x\n", opcode);
+}
+
+/*--------------------------------------------------------------------- 
+ * Method: handle_ip_packet(struct_sr_ethernet_hdr* eth_hdr) 
+ * Scope:  Global
+ *
+ * This method is called when the ethernet header is IP type
+ *
+ *---------------------------------------------------------------------*/
+void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* p){
+    printf("*** handle ip packet\n");
+    // TODO
+}
 
 
 /*--------------------------------------------------------------------- 
@@ -86,22 +129,31 @@ void sr_printpacket(uint8_t* p) {
 	sr_print_eth_hdr(p);
 }
 
+void print_hardware_address(uint8_t *addr_ptr, int len){
+    for (int i = 0; i < len; i++) {
+        printf("%01x", addr_ptr[i]);
+        if (i != len - 1) 
+            printf(":");
+    }
+    printf("\n");
+}
+
+void print_ip_addr(uint32_t ip_32){
+    struct in_addr ip_addr_struct;
+    ip_addr_struct.s_addr = ip_32; 
+    printf("%s\n", inet_ntoa(ip_addr_struct)); // method to convert struct in_addr to IP string
+}
 
 void sr_print_eth_hdr(uint8_t * p) {
 	struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
-	uint8_t * dest_host_addr = eth_hdr->ether_dhost;
-	uint8_t * src_host_addr = eth_hdr->ether_shost;
 	uint16_t eth_type = eth_hdr->ether_type;
 	eth_type = SWAP_UINT16(eth_type);
 	// ethernet header
-	printf("Ethernet Header Destination Address: %02x%02x.%02x%02x.%02x%02x\n", \
-			dest_host_addr[0], dest_host_addr[1], dest_host_addr[2], dest_host_addr[3], \
-			dest_host_addr[4], dest_host_addr[5]);
-	printf("Ethernet Header Source Address: %02x%02x.%02x%02x.%02x%02x\n", \
-			src_host_addr[0], src_host_addr[1], src_host_addr[2], src_host_addr[3], \
-			src_host_addr[4], src_host_addr[5]);
-
-	printf("Type of next protocol: %04x\n", eth_type);
+	printf("\tEthernet Header Destination Address: ");
+    print_hardware_address(eth_hdr->ether_dhost, ETHER_ADDR_LEN);
+	printf("\tEthernet Header Source Address: ");
+    print_hardware_address(eth_hdr->ether_shost, ETHER_ADDR_LEN);
+	printf("\tType of next protocol: %04x\n", eth_type);
 
 	// ARP/IP
 	p = p + sizeof(struct sr_ethernet_hdr);
@@ -116,54 +168,26 @@ void sr_print_eth_hdr(uint8_t * p) {
 
 }
 
-
 void sr_print_arp_hdr(uint8_t * p) {
 	struct sr_arphdr * arp_hdr  = (struct sr_arphdr *) p;
 	unsigned short hw_addr_format = SWAP_UINT16(arp_hdr->ar_hrd);
 	unsigned short pr_addr_format = SWAP_UINT16(arp_hdr->ar_pro);
-	printf("ARP hardware address format: %02x\n", hw_addr_format);
-	printf("ARP protocal address format: %02x\n", pr_addr_format);
-	printf("ARP hardware address length: %u\n", arp_hdr->ar_hln);
-	printf("ARP protocal address length: %u\n", arp_hdr->ar_pln);
+	printf("\t\tARP hardware address format: %02x\n", hw_addr_format);
+	printf("\t\tARP protocol address format: %02x\n", pr_addr_format);
+	printf("\t\tARP hardware address length: %u\n", arp_hdr->ar_hln);
+	printf("\t\tARP protocol address length: %u\n", arp_hdr->ar_pln);
 	unsigned short opcode = SWAP_UINT16(arp_hdr->ar_op);
-	printf("ARP opcode: %02x\n", opcode);
-	printf("ARP sender hardware address: ");
-	for (int i = 0; i < ETHER_ADDR_LEN;  i++) {
-		printf("%01x", arp_hdr->ar_sha[i]);
-		if (i != ETHER_ADDR_LEN - 1 && i % 2 == 1) {
-			printf(".");
-		}
-	}
-	printf("\n");
-	printf("ARP sender IP address: ");
-	uint8_t sender_ipv4[IPV4_ADDR_LEN];
-	convert_uint32_to_ip(arp_hdr->ar_sip, sender_ipv4);
-	for (int i = 0; i < IPV4_ADDR_LEN; i++) {
-		printf("%01x", sender_ipv4[i]);
-		if (i != IPV4_ADDR_LEN - 1) {
-			printf(".");
-		}
-	}
-	printf("\n");
-	printf("ARP target hardware address: ");
-	for (int i = 0; i < ETHER_ADDR_LEN; i++) {
-		printf("%01x", arp_hdr->ar_tha[i]);
-		if (i != ETHER_ADDR_LEN - 1) {
-			printf(".");
-		}
-	}
-	printf("\n");
-	printf("ARP target IP address: ");
-	uint8_t target_ipv4[IPV4_ADDR_LEN];
-	convert_uint32_to_ip(arp_hdr->ar_tip, target_ipv4);
-	for (int i = 0; i < IPV4_ADDR_LEN; i++) {
-		printf("%01x", target_ipv4[i]);
-		if (i != IPV4_ADDR_LEN - 1) {
-			printf(".");
-		}
-	}
-	printf("\n");
-
+	printf("\t\tARP opcode: %02x\n", opcode);
+    // ARP sender addresses
+	printf("\t\tARP sender hardware address: ");
+    print_hardware_address(arp_hdr->ar_sha, ETHER_ADDR_LEN);
+	printf("\t\tARP sender IP address: ");
+    print_ip_addr(arp_hdr->ar_sip);
+    // ARP target addresses
+	printf("\t\tARP target hardware address: ");
+    print_hardware_address(arp_hdr->ar_tha, ETHER_ADDR_LEN);
+	printf("\t\tARP target IP address: ");
+    print_ip_addr(arp_hdr->ar_tip);
 }
 
 

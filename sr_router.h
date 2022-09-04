@@ -76,6 +76,8 @@ int sr_read_from_server(struct sr_instance* );
 /* -- sr_router.c -- */
 void sr_init(struct sr_instance* );
 void sr_handlepacket(struct sr_instance* , uint8_t * , unsigned int , char* );
+void sr_handle_arp_packet(struct sr_instance*, uint8_t *);
+void sr_handle_ip_packet(struct sr_instance*, uint8_t *);
 void sr_printpacket(uint8_t *packet);
 void sr_print_eth_hdr(uint8_t *p);
 void sr_print_arp_hdr(uint8_t *p);
