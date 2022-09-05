@@ -162,7 +162,7 @@ void sr_print_eth_hdr(uint8_t * p) {
 		p = p + sizeof(struct sr_arphdr);
 	}
 	else if (eth_type == ETHERTYPE_IP) {
-		//sr_print_ip_hdr(p);
+		sr_print_ip_hdr(p);
 		p = p + sizeof(struct  ip);
 	}
 
@@ -188,6 +188,23 @@ void sr_print_arp_hdr(uint8_t * p) {
     print_hardware_address(arp_hdr->ar_tha, ETHER_ADDR_LEN);
 	printf("\t\tARP target IP address: ");
     print_ip_addr(arp_hdr->ar_tip);
+}
+
+void sr_print_ip_hdr(uint8_t * p) {
+	struct ip * ip_hdr = (struct ip *) p; 
+	printf("\t\tIP Type of Service: %01x\n", ip_hdr->ip_tos);
+	unsigned short len_of_ip_pkt = SWAP_UINT16(ip_hdr->ip_len);
+	printf("\t\tIP Packet Total Length: %02x\n", len_of_ip_pkt);
+	unsigned short ip_iden = SWAP_UINT16(ip_hdr->ip_id);
+	printf("\t\tIP Packet ID: %02x\n", ip_iden);
+	unsigned short frag_off = SWAP_UINT16(ip_hdr->ip_off);
+	printf("\t\tIP Fragment Offset: %02x\n", frag_off);
+	printf("\t\tIP TTL: %01x\n", ip_hdr->ip_ttl);
+	printf("\t\tIP Protocol: %01x\n", ip_hdr->ip_p);
+	unsigned short checksum = SWAP_UINT16(ip_hdr->ip_sum);
+	printf("\t\tIP Checksum: %02x\n", checksum);
+	printf("\t\tIP Source Address: %s\n", inet_ntoa(ip_hdr->ip_src));
+	printf("\t\tIP Destination Address: %s\n", inet_ntoa(ip_hdr->ip_dst));
 }
 
 
