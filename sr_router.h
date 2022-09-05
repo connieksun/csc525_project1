@@ -62,6 +62,7 @@ struct sr_instance
     struct sockaddr_in sr_addr; /* address to server */
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
+    struct sr_arp_cache* arp_cache;
     FILE* logfile;
 };
 
@@ -81,6 +82,7 @@ void sr_handle_ip_packet(struct sr_instance*, uint8_t *);
 void sr_printpacket(uint8_t *packet);
 void sr_print_eth_hdr(uint8_t *p);
 void sr_print_arp_hdr(uint8_t *p);
+void sr_print_ip_hdr(uint8_t *p);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );
