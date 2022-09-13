@@ -4,13 +4,14 @@
  * This file defines helper methods for sr_router.c
  */
 
-
-/**
- * convert_uint32_to_ip(uint32_t address) takes a uint32_t and converts it to ipv4
- */
-void convert_uint32_to_ip(uint32_t address, uint8_t* ip) {
-	int x;
-	for (x = IPV4_ADDR_LEN - 1; x >= 0; x--) {
-		ip[x] = (address >> (x*8)) & (uint8_t) -1;
+uint16_t checksum(uint16_t *buf, int len){
+	unsigned long sum = 0;
+	while (len--){
+		sum += *buf++;
+		if (sum & 0xFFFF0000){
+			sum &= 0xFFFF;
+			sum++;
+		}
 	}
+	return ~(sum & 0xFFFF);
 }

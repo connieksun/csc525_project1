@@ -83,6 +83,7 @@ void sr_printpacket(uint8_t *packet);
 void sr_print_eth_hdr(uint8_t *p);
 void sr_print_arp_hdr(uint8_t *p);
 void sr_print_ip_hdr(uint8_t *p);
+void sr_print_icmp_hdr(struct ip*);
 
 /* -- sr_if.c -- */
 void sr_add_interface(struct sr_instance* , const char* );

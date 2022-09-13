@@ -22,6 +22,7 @@
 #include "sr_protocol.h"
 #include "sr_router_helper.h"
 #include "sr_arp.h"
+#include "sr_ip.h"
 
 /*--------------------------------------------------------------------- 
  * Method: sr_init(void)
@@ -112,7 +113,14 @@ void sr_handle_arp_packet(struct sr_instance* sr, uint8_t* p){
  *---------------------------------------------------------------------*/
 void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* p){
     printf("*** handle ip packet\n");
-    // TODO
+    struct ip* ip_hdr = (struct ip*) (p + sizeof(struct sr_ethernet_hdr));
+    sr_handle_ip(sr, p, ip_hdr);
+
+    // test checksum
+    // ip_hdr->ip_sum = 0;
+    // uint16_t new_sum = checksum((uint16_t *) ip_hdr, ip_hdr->ip_hl * 2);
+    // new_sum = SWAP_UINT16(new_sum);
+	// printf("\t\tCalculated Checksum: %02x\n", new_sum);
 }
 
 
@@ -205,6 +213,20 @@ void sr_print_ip_hdr(uint8_t * p) {
 	printf("\t\tIP Checksum: %02x\n", checksum);
 	printf("\t\tIP Source Address: %s\n", inet_ntoa(ip_hdr->ip_src));
 	printf("\t\tIP Destination Address: %s\n", inet_ntoa(ip_hdr->ip_dst));
+    if (ip_hdr->ip_p == ICMP_PROTOCOL)
+        sr_print_icmp_hdr(ip_hdr);
+}
+
+void sr_print_icmp_hdr(struct ip* ip_hdr){
+    struct icmp *icmp_hdr = (struct icmp *) (ip_hdr + 1);
+    printf("\t\t\tICMP Type: %01x\n", icmp_hdr->icmp_type);
+    printf("\t\t\tICMP Code: %01x\n", icmp_hdr->icmp_code);
+    unsigned short checksum = SWAP_UINT16(icmp_hdr->icmp_sum);
+    printf("\t\t\tICMP Checksum: %02x\n", checksum);
+    unsigned short identifier = SWAP_UINT16(icmp_hdr->icmp_id);
+    printf("\t\t\tICMP Identifier: %02x\n", identifier);
+    unsigned short seq_num = SWAP_UINT16(icmp_hdr->icmp_sn);
+    printf("\t\t\tICMP Sequence Number: %02x\n", seq_num);
 }
 
 
