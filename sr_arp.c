@@ -75,10 +75,12 @@ void sr_send_arp_reply(struct sr_instance* sr,
 void sr_handle_arp_reply(struct sr_instance* sr,
                          uint8_t* p){
     printf("*** handle arp reply\n");
+    // TODO
 }
 
 void sr_send_arp_request(){
     printf("*** send arp request\n");
+    // TODO
 }
 
 // prints routing table's destination IPs

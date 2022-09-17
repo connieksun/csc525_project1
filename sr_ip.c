@@ -46,9 +46,10 @@ void sr_handle_ip(struct sr_instance* sr,
     if (interface_match) {
         sr_handle_icmp(sr, p, ip_hdr, interface_match);
     } else {
+        printf("destination is not router\n");
+        // TODO
         // decrement TTL
         // forwarding
-        printf("destination is not router\n");
     }
 }
 
@@ -88,7 +89,6 @@ void sr_handle_icmp(struct sr_instance* sr,
     ip_hdr->ip_sum = checksum((uint16_t *) ip_hdr, ip_hdr->ip_hl * 2);
     // update ethernet header
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
-    uint8_t *tmp = eth_hdr->ether_dhost;
     memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
     memcpy(eth_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
 
