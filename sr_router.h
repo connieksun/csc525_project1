@@ -63,6 +63,7 @@ struct sr_instance
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
     struct sr_arp_cache* arp_cache;
+    uint8_t waitingOnArpReply;
     FILE* logfile;
 };
 
@@ -90,5 +91,10 @@ void sr_add_interface(struct sr_instance* , const char* );
 void sr_set_ether_ip(struct sr_instance* , uint32_t );
 void sr_set_ether_addr(struct sr_instance* , const unsigned char* );
 void sr_print_if_list(struct sr_instance* );
+
+/* -- sr_router_helper.c -- */
+uint16_t checksum(uint16_t *buf, int len);
+struct sr_arp_cache* get_cached_arp_entry(struct sr_instance* sr, uint8_t * p, struct in_addr dst);
+struct sr_if* get_router_interface(struct sr_instance*);
 
 #endif /* SR_ROUTER_H */

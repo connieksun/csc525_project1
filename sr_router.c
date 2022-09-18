@@ -38,7 +38,8 @@ void sr_init(struct sr_instance* sr)
     assert(sr);
 
     /* Add initialization code here! */
-
+    sr->waitingOnArpReply = 0;
+    sr->arp_cache = NULL;
 } /* -- sr_init -- */
 
 
@@ -122,6 +123,8 @@ void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* p){
     // new_sum = SWAP_UINT16(new_sum);
 	// printf("\t\tCalculated Checksum: %02x\n", new_sum);
 }
+
+
 
 
 /*--------------------------------------------------------------------- 

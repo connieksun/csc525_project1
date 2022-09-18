@@ -19,6 +19,7 @@
 #include "sr_protocol.h"
 #include "sr_router_helper.h"
 #include "sr_ip.h"
+#include "sr_arp.h"
 
 
 struct sr_if* get_interface_dst(struct sr_instance* sr, struct in_addr dst) {
@@ -42,11 +43,28 @@ void sr_handle_ip(struct sr_instance* sr,
                             struct ip* ip_hdr){
     printf("*** handle ip\n");
     struct in_addr dst = ip_hdr->ip_dst;
+    struct sr_ethernet_hdr* incm_eth_hdr = (struct sr_ethernet_hdr*) p;
     struct sr_if* interface_match = get_interface_dst(sr, dst);
-    if (interface_match) {
-        sr_handle_icmp(sr, p, ip_hdr, interface_match);
+    int packet_is_for_router = 1;
+    for (int i = 0; i < ETHER_ADDR_LEN; i++) {
+        if (interface_match->addr[i] != incm_eth_hdr->ether_dhost[i])
+            packet_is_for_router = 0;
+    }
+    if (packet_is_for_router) {
+       sr_handle_icmp(sr, p, ip_hdr, interface_match);
     } else {
-        printf("destination is not router\n");
+        printf("  destination is not router\n");
+        printf("    checking ARP cache\n");
+        struct sr_arp_cache * arp_entry = get_cached_arp_entry(sr, p, dst);
+        if (arp_entry == NULL) {
+            printf("      ARP val was not in cache\n");
+            sr->waitingOnArpReply = 1;
+            sr_send_arp_request(sr, p, ip_hdr);
+            //arp_entry = sr_handle_arp_reply();
+        }
+        //interface_match = get_next_hop();
+        
+
         // TODO
         // decrement TTL
         // forwarding
@@ -71,6 +89,7 @@ void sr_handle_icmp(struct sr_instance* sr,
     struct icmp *icmp_hdr = (struct icmp *) (ip_hdr + 1);
     if (icmp_hdr->icmp_type != ICMP_ECHO_REQUEST) return;
 
+    
     uint16_t ip_len = SWAP_UINT16(ip_hdr->ip_len);
     int total_len_16 = (ip_len - (ip_hdr->ip_hl * 4)) / 2;
 
@@ -91,7 +110,6 @@ void sr_handle_icmp(struct sr_instance* sr,
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
     memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
     memcpy(eth_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
-
     int len = ip_len + sizeof(struct sr_ethernet_hdr);
     printf("*** -> sending packet of length %d\n", len);
     sr_printpacket(p);

@@ -7,6 +7,7 @@
  **********************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <netinet/in.h>
@@ -32,11 +33,11 @@ void sr_handle_arp_request(struct sr_instance* sr,
                             uint8_t* p,
                             struct sr_arphdr* arphdr){
     printf("*** handle arp request\n");
-    //print_if_ip(sr);
+    print_if_ip(sr);
     struct sr_if *interface = sr->if_list;
     while (interface){
         if (interface->ip == arphdr->ar_tip) {
-            sr_send_arp_reply(sr, p, arphdr, interface);
+            sr_send_arp_reply(sr, p, interface);
             break;
         }
         interface = interface->next;
@@ -45,7 +46,7 @@ void sr_handle_arp_request(struct sr_instance* sr,
 
 void sr_send_arp_reply(struct sr_instance* sr,
                         uint8_t* p,
-                        struct sr_arphdr* arphdr, 
+                     
                         struct sr_if* interface){
     printf("*** send arp reply\n");
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
@@ -78,9 +79,33 @@ void sr_handle_arp_reply(struct sr_instance* sr,
     // TODO
 }
 
-void sr_send_arp_request(){
+void sr_send_arp_request(struct sr_instance* sr, uint8_t* p, struct ip* ip_hdr) {
     printf("*** send arp request\n");
-    // TODO
+    uint8_t* packet_to_send = malloc(sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arphdr));
+    struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) packet_to_send;
+    struct sr_arphdr* arp_hdr = (struct sr_arphdr*) packet_to_send + sizeof(struct sr_ethernet_hdr);
+    struct sr_ethernet_hdr * eth_hdr_of_packet_to_fwd = (struct sr_ethernet_hdr *) p;
+    eth_hdr->ether_type = ETHERTYPE_ARP;
+    for (int i = 0; i < ETHER_ADDR_LEN; i++) {
+        eth_hdr->ether_dhost[i] = 0xFF; // broadcast to all dest
+        eth_hdr->ether_shost[i] = eth_hdr_of_packet_to_fwd->ether_dhost[i]; // set source to be me, who was the recipient of the packet we need to fwd
+    }
+    // end filling ethernet header
+    // begin filling arp header
+    arp_hdr->ar_hrd = SWAP_UINT16(ARPHDR_ETHER);
+    arp_hdr->ar_pro = SWAP_UINT16(ETHERTYPE_IP);
+    arp_hdr->ar_hln = ETHER_ADDR_LEN;
+    arp_hdr->ar_pln = IPV4_ADDR_LEN;
+    arp_hdr->ar_op = SWAP_UINT16(ARP_REQUEST);
+    memcpy(arp_hdr->ar_sha, eth_hdr->ether_shost, ETHER_ADDR_LEN);
+    struct sr_if* router_if = get_router_interface(sr);
+    arp_hdr->ar_sip = router_if->ip;
+    for (int i = 0; i < ETHER_ADDR_LEN; i++) {
+        arp_hdr->ar_tha[i] = 0x00; 
+    }
+    arp_hdr->ar_tip = ip_hdr->ip_dst.s_addr;
+    sr_print_eth_hdr((uint8_t*)eth_hdr);
+    sr_print_arp_hdr((uint8_t*)arp_hdr);
 }
 
 // prints routing table's destination IPs
