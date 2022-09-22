@@ -92,9 +92,14 @@ void sr_set_ether_ip(struct sr_instance* , uint32_t );
 void sr_set_ether_addr(struct sr_instance* , const unsigned char* );
 void sr_print_if_list(struct sr_instance* );
 
+
 /* -- sr_router_helper.c -- */
 uint16_t checksum(uint16_t *buf, int len);
 struct sr_arp_cache* get_cached_arp_entry(struct sr_instance* sr, uint8_t * p, struct in_addr dst);
 struct sr_if* get_router_interface(struct sr_instance*);
+struct sr_if* get_best_if_match(struct sr_instance*, struct in_addr);
+struct sr_rt* get_best_rt_match(struct sr_instance*, struct in_addr);
+
+
 
 #endif /* SR_ROUTER_H */

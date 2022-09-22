@@ -43,31 +43,36 @@ void sr_handle_ip(struct sr_instance* sr,
                             struct ip* ip_hdr){
     printf("*** handle ip\n");
     struct in_addr dst = ip_hdr->ip_dst;
-    struct sr_ethernet_hdr* incm_eth_hdr = (struct sr_ethernet_hdr*) p;
-    struct sr_if* interface_match = get_interface_dst(sr, dst);
-    int packet_is_for_router = 1;
-    for (int i = 0; i < ETHER_ADDR_LEN; i++) {
-        if (interface_match->addr[i] != incm_eth_hdr->ether_dhost[i])
-            packet_is_for_router = 0;
-    }
-    if (packet_is_for_router) {
-       sr_handle_icmp(sr, p, ip_hdr, interface_match);
+    struct sr_if* router_if_match = get_interface_dst(sr, dst); // to be used if dest is one of our router/repeater
+    if (router_if_match) {
+       sr_handle_icmp(sr, p, ip_hdr, router_if_match);
     } else {
         printf("  destination is not router\n");
-        printf("    checking ARP cache\n");
+        struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr*) p;
+        struct sr_rt* best_route = get_best_rt_match(sr, dst); // find which route to send a long
+        struct sr_if* next_hop_if = sr_get_interface(sr, best_route->interface);
+        memcpy(eth_hdr->ether_shost, next_hop_if->addr, ETHER_ADDR_LEN); 
+
         struct sr_arp_cache * arp_entry = get_cached_arp_entry(sr, p, dst);
         if (arp_entry == NULL) {
             printf("      ARP val was not in cache\n");
             sr->waitingOnArpReply = 1;
             sr_send_arp_request(sr, p, ip_hdr);
-            //arp_entry = sr_handle_arp_reply();
+            return; //TODO: possibly buffer packet
+        } else {
+            memcpy(eth_hdr->ether_dhost, arp_entry->phys_addr, ETHER_ADDR_LEN);
+            struct ip* ip_hdr = (struct ip*) (p + sizeof(struct sr_ethernet_hdr));
+            ip_hdr->ip_ttl = ip_hdr->ip_ttl - 1;
+            if (ip_hdr->ip_ttl == 0) return;
+            ip_hdr->ip_sum = 0;
+            ip_hdr->ip_sum = checksum((uint16_t *) ip_hdr, ip_hdr->ip_hl * 2);
+            printf("CHANGED ETHER HEADER AND FORWARD:\n");
+            sr_printpacket(p);
+            uint16_t ip_len = SWAP_UINT16(ip_hdr->ip_len);
+            int len = ip_len + sizeof(struct sr_ethernet_hdr);
+            printf("*** -> sending packet of length %d\n", len);
+            sr_send_packet(sr, p, len, next_hop_if->name);
         }
-        //interface_match = get_next_hop();
-        
-
-        // TODO
-        // decrement TTL
-        // forwarding
     }
 }
 
@@ -87,7 +92,9 @@ void sr_handle_icmp(struct sr_instance* sr,
     if (protocol != ICMP_PROTOCOL) return;
     // ptr arithmetic is in units of struct size
     struct icmp *icmp_hdr = (struct icmp *) (ip_hdr + 1);
-    if (icmp_hdr->icmp_type != ICMP_ECHO_REQUEST) return;
+    if (icmp_hdr->icmp_type != ICMP_ECHO_REQUEST) {
+        return;
+    } 
 
     
     uint16_t ip_len = SWAP_UINT16(ip_hdr->ip_len);
@@ -108,10 +115,11 @@ void sr_handle_icmp(struct sr_instance* sr,
     ip_hdr->ip_sum = checksum((uint16_t *) ip_hdr, ip_hdr->ip_hl * 2);
     // update ethernet header
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
+    struct sr_if* router_if = get_router_interface(sr);
     memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
-    memcpy(eth_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
+    memcpy(eth_hdr->ether_shost, router_if->addr, ETHER_ADDR_LEN);
     int len = ip_len + sizeof(struct sr_ethernet_hdr);
     printf("*** -> sending packet of length %d\n", len);
     sr_printpacket(p);
-    sr_send_packet(sr, p, len, interface->name);
+    sr_send_packet(sr, p, len, router_if->name);
 }
