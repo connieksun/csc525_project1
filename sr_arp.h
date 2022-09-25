@@ -16,6 +16,7 @@ void add_entry_to_cache(struct sr_instance*, struct sr_arp_cache*);
 void print_rt_ip(struct sr_instance*);
 void print_if_ip(struct sr_instance*);
 
+// represents a LL of cache entries. Will be attached to sr_instance of our router
 struct sr_arp_cache {
 	unsigned char* phys_addr[ETHER_ADDR_LEN];
 	uint32_t ip_addr;

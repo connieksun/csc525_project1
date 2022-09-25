@@ -3,7 +3,7 @@
  *
  * Description:
  * 
- * This file contains all the functions to handle ARP
+ * This file contains functions to handle ARP
  **********************************************************************/
 
 #include <stdio.h>
@@ -23,17 +23,20 @@
 
 
 /*--------------------------------------------------------------------- 
- * Method: handle_arp_request(struct sr_arphdr* p) 
+ * Method: sr_handle_arp_request(struct sr_instance* sr,
+                            uint8_t* p,
+                            struct sr_arphdr* arphdr ) 
  * Scope:  Global
  *
  * This method is called when the received ARP packet has opcode = request
+ *  Will initiate the sending of an arp reply along the correct channel
  *
  *---------------------------------------------------------------------*/
 void sr_handle_arp_request(struct sr_instance* sr,
                             uint8_t* p,
                             struct sr_arphdr* arphdr){
-    printf("*** handle arp request\n");
-    print_if_ip(sr);
+    //printf("*** handle arp request\n");
+    //print_if_ip(sr);
     struct sr_if *interface = sr->if_list;
     while (interface){
         if (interface->ip == arphdr->ar_tip) {
@@ -44,10 +47,19 @@ void sr_handle_arp_request(struct sr_instance* sr,
     }
 }
 
+/*--------------------------------------------------------------------- 
+ * Method: sr_send_arp_reply(struct sr_instance* sr,
+                        uint8_t* p,
+                        struct sr_if* interface) 
+ * Scope:  Global
+ *
+ * This method is invoked when we have received an ARP request, and must send an ARP reply
+ *
+ *---------------------------------------------------------------------*/
 void sr_send_arp_reply(struct sr_instance* sr,
                         uint8_t* p,
                         struct sr_if* interface){
-    printf("*** send arp reply\n");
+    //printf("*** send arp reply\n");
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) p;
     memcpy(eth_hdr->ether_dhost, eth_hdr->ether_shost, ETHER_ADDR_LEN);
     memcpy(eth_hdr->ether_shost, interface->addr, ETHER_ADDR_LEN);
@@ -60,21 +72,24 @@ void sr_send_arp_reply(struct sr_instance* sr,
     arp_hdr->ar_sip = interface->ip;
 
     unsigned int len = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arphdr);
-    printf("*** -> sending packet of length %d\n", len);
-    sr_printpacket(p);
+    //printf("*** -> sending packet of length %d\n", len);
+    //sr_printpacket(p);
     sr_send_packet(sr, p, len, interface->name);
 }
 
 /*--------------------------------------------------------------------- 
- * Method: handle_arp_packet(struct sr_arphdr* p) 
+ * Method: sr_handle_arp_reply(struct sr_instance* sr,
+                         uint8_t* p) 
  * Scope:  Global
  *
  * This method is called when the received ARP packet has opcode = reply
+ *  Will add ARP information to ARP cache and handle packets which were 
+ *   waiting for this information
  *
  *---------------------------------------------------------------------*/
 void sr_handle_arp_reply(struct sr_instance* sr,
                          uint8_t* p){
-    printf("*** handle arp reply\n");
+    //printf("*** handle arp reply\n");
     struct sr_arphdr* arp_hdr = (struct sr_arphdr*) (p + sizeof(struct sr_ethernet_hdr));
     struct sr_arp_cache* cache_entry = malloc(sizeof(struct sr_arp_cache));
     memcpy(cache_entry->phys_addr, arp_hdr->ar_sha, ETHER_ADDR_LEN);
@@ -82,20 +97,28 @@ void sr_handle_arp_reply(struct sr_instance* sr,
     struct timeval * cur_time = malloc(sizeof(struct timeval));
     gettimeofday(cur_time, NULL);
     cache_entry->time_added = cur_time->tv_sec;
-    add_entry_to_cache(sr, cache_entry);
     free(cur_time);
-    // TODO: is this where we want to flip 'isWaiting' back??
+    add_entry_to_cache(sr, cache_entry);
+    handle_buffered_packets(sr, cache_entry->ip_addr); // must handle any buffered packets
 }
 
+/*----------------------------------------------------------------------------------- 
+ * Method: sr_send_arp_request(struct sr_instance* sr, uint8_t* p, struct ip* ip_hdr) 
+ * Scope:  Global
+ *
+ * This method is called when we have received a packet whose destination's
+ *  physical address is unknown to us, so we must learn it by forming an ARP request
+ *
+ *----------------------------------------------------------------------------------*/
 void sr_send_arp_request(struct sr_instance* sr, uint8_t* p, struct ip* ip_hdr) {
-    printf("*** send arp request\n");
+    //printf("*** send arp request\n");
     int len_of_packet = sizeof(struct sr_ethernet_hdr) + sizeof(struct sr_arphdr);
     uint8_t* packet_to_send = malloc(len_of_packet);
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) packet_to_send;
     struct sr_arphdr* arp_hdr = (struct sr_arphdr*) (packet_to_send + sizeof(struct sr_ethernet_hdr));
     eth_hdr->ether_type = SWAP_UINT16(ETHERTYPE_ARP);
     struct sr_if* interface = get_best_if_match(sr, ip_hdr->ip_dst);
-    printf("Sending ARP packet to: %s\n", interface->name);
+    //printf("Sending ARP packet to: %s\n", interface->name);
     for (int i = 0; i < ETHER_ADDR_LEN; i++) {
         eth_hdr->ether_dhost[i] = 0xFF; // broadcast to all dest
         eth_hdr->ether_shost[i] = interface->addr[i]; // set source to be outgoing if
@@ -114,19 +137,28 @@ void sr_send_arp_request(struct sr_instance* sr, uint8_t* p, struct ip* ip_hdr) 
         arp_hdr->ar_tha[i] = 0x00; 
     }
     arp_hdr->ar_tip = ip_hdr->ip_dst.s_addr;
-    sr_print_eth_hdr(packet_to_send);
+    //sr_print_eth_hdr(packet_to_send);
     sr_send_packet(sr, packet_to_send, len_of_packet, interface->name);
     
 }
 
-void add_entry_to_cache(struct sr_instance* sr, struct sr_arp_cache* cache_entry) {
+/*----------------------------------------------------------------------------------- 
+ * Method: add_entry_to_cache(struct sr_instance* sr, 
+ *                              struct sr_arp_cache* new_cache_entry)
+ * Scope:  Global
+ *
+ * This method is called when we have received an ARP reply. It adds relevant
+ *  information from the ARP reply to our cache so we may use it again as needed
+ *
+ *----------------------------------------------------------------------------------*/
+void add_entry_to_cache(struct sr_instance* sr, struct sr_arp_cache* new_cache_entry) {
     struct sr_arp_cache * cache = sr->arp_cache;
     struct sr_arp_cache * last_entry = NULL;
     while (cache) {
-        if (cache->ip_addr == cache_entry->ip_addr) { // if this ip already has an entry
-            memcpy(cache->phys_addr, cache_entry->phys_addr, ETHER_ADDR_LEN); // just update it
-            cache->time_added = cache_entry->time_added;
-            free(cache_entry);
+        if (cache->ip_addr == new_cache_entry->ip_addr) { // if this ip already has an entry
+            memcpy(cache->phys_addr, new_cache_entry->phys_addr, ETHER_ADDR_LEN); // just update it
+            cache->time_added = new_cache_entry->time_added;
+            free(new_cache_entry);
             return;
         }
         last_entry = cache; // keep track of current last entry
@@ -135,17 +167,18 @@ void add_entry_to_cache(struct sr_instance* sr, struct sr_arp_cache* cache_entry
     // at this point we know that the ip for which we received the hardware
     // address is not already in the cache, so we add it at the end
     if (last_entry) { // if cache had even one entry, this will be true
-        last_entry->next = cache_entry;
-        cache_entry->prev = last_entry;
-        cache_entry->next = NULL;
+        last_entry->next = new_cache_entry;
+        new_cache_entry->prev = last_entry;
+        new_cache_entry->next = NULL;
     } else {
-        sr->arp_cache = cache_entry;
+        sr->arp_cache = new_cache_entry;
+        sr->arp_cache->next = NULL;
+        sr->arp_cache->prev = NULL;
     }
  
 }
 
 // prints routing table's destination IPs
-// not sure why i put it here
 void print_rt_ip(struct sr_instance *sr){
     struct sr_rt *rt = sr->routing_table;
     char *ip_addr;
@@ -157,7 +190,6 @@ void print_rt_ip(struct sr_instance *sr){
 }
 
 // prints router's interface IPs
-// not sure why i put it here
 void print_if_ip(struct sr_instance *sr){
     struct sr_if *interface = sr->if_list;
     char *ip_addr;
