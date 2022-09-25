@@ -12,6 +12,8 @@
  **********************************************************************/
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <inttypes.h>
 
@@ -38,8 +40,8 @@ void sr_init(struct sr_instance* sr)
     assert(sr);
 
     /* Add initialization code here! */
-    sr->waitingOnArpReply = 0;
     sr->arp_cache = NULL;
+    sr->packet_buffer = NULL;
 } /* -- sr_init -- */
 
 
@@ -70,20 +72,31 @@ void sr_handlepacket(struct sr_instance* sr,
     assert(packet);
     assert(interface);
 
-    printf("*** -> Received packet of length %d \n",len);
-    sr_printpacket(packet);
+    // printf("*** -> Received packet of length %d \n",len);
+    // sr_printpacket(packet);
     
     // actual packet handling begins here
     struct sr_ethernet_hdr* eth_hdr = (struct sr_ethernet_hdr *) packet;
+    struct sr_arp_cache* cache_entry = malloc(sizeof(struct sr_arp_cache));
+    memcpy(cache_entry->phys_addr, eth_hdr->ether_shost, ETHER_ADDR_LEN); 
+    struct timeval* tv = malloc(sizeof(struct timeval));
+    gettimeofday(tv, NULL);
+    cache_entry->time_added = tv->tv_sec;
+    free(tv);
     uint16_t eth_type = SWAP_UINT16(eth_hdr->ether_type);
     if (eth_type == ETHERTYPE_ARP) {
+        struct sr_arphdr* arp_hd = (struct sr_arphdr *) (packet + sizeof(struct sr_ethernet_hdr));
+        cache_entry->ip_addr = arp_hd->ar_sip;
+        add_entry_to_cache(sr, cache_entry); // add incoming packet information to cache for free
         sr_handle_arp_packet(sr, packet);
     } else if (eth_type == ETHERTYPE_IP) {
+        struct ip* ip_hdr = (struct ip*) (packet + sizeof(struct sr_ethernet_hdr));
+        cache_entry->ip_addr = ip_hdr->ip_src.s_addr;
+        add_entry_to_cache(sr, cache_entry); // add incoming packet information to cache for free
         sr_handle_ip_packet(sr, packet);
     } else
         fprintf(stderr, "*** Error: ethertype %02x unknown\n", eth_type);
-
-}/* end sr_ForwardPacket */
+}
 
 
 /*--------------------------------------------------------------------- 
@@ -94,7 +107,7 @@ void sr_handlepacket(struct sr_instance* sr,
  *
  *---------------------------------------------------------------------*/
 void sr_handle_arp_packet(struct sr_instance* sr, uint8_t* p){
-    printf("*** handle arp packet\n");
+    // printf("*** handle arp packet\n");
     struct sr_arphdr* arp_hdr  = (struct sr_arphdr *) (p + sizeof(struct sr_ethernet_hdr));
     unsigned short opcode = SWAP_UINT16(arp_hdr->ar_op);
     if (opcode == ARP_REQUEST)
@@ -113,7 +126,7 @@ void sr_handle_arp_packet(struct sr_instance* sr, uint8_t* p){
  *
  *---------------------------------------------------------------------*/
 void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* p){
-    printf("*** handle ip packet\n");
+    //printf("*** handle ip packet\n");
     struct ip* ip_hdr = (struct ip*) (p + sizeof(struct sr_ethernet_hdr));
     sr_handle_ip(sr, p, ip_hdr);
 
@@ -128,12 +141,7 @@ void sr_handle_ip_packet(struct sr_instance* sr, uint8_t* p){
 
 
 /*--------------------------------------------------------------------- 
- * Method: print_packet(uint8_t* p) 
- * Scope:  Global
- *
- * This method is called for debugging purposes. Print information about
- * packet p.
- *
+    * Below this line are print methods for debugging. 
  *---------------------------------------------------------------------*/
 
 void sr_printpacket(uint8_t* p) {

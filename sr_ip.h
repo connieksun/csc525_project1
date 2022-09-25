@@ -21,6 +21,7 @@
 void sr_handle_ip(struct sr_instance*, uint8_t*, struct ip*);
 void sr_handle_icmp(struct sr_instance*, uint8_t*, struct ip*, struct sr_if*);
 
+// define icmp struct for easier modification of fields
 struct icmp {
     uint8_t icmp_type;
     uint8_t icmp_code;

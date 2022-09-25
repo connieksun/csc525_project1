@@ -42,6 +42,19 @@ struct sr_if;
 struct sr_rt;
 
 /* ----------------------------------------------------------------------------
+ * struct sr_packet_buffer
+ *
+ * If waiting on an ARP reply, must buffer packets. This struct forms a LL
+ *  to do so.
+ *
+ * -------------------------------------------------------------------------- */
+struct sr_packet_buffer {
+    uint8_t * packet;
+    struct sr_packet_buffer* prev;
+    struct sr_packet_buffer* next;
+};
+
+/* ----------------------------------------------------------------------------
  * struct sr_instance
  *
  * Encapsulation of the state for a single virtual router.
@@ -63,7 +76,7 @@ struct sr_instance
     struct sr_if* if_list; /* list of interfaces */
     struct sr_rt* routing_table; /* routing table */
     struct sr_arp_cache* arp_cache;
-    uint8_t waitingOnArpReply;
+    struct sr_packet_buffer* packet_buffer;
     FILE* logfile;
 };
 
@@ -99,7 +112,8 @@ struct sr_arp_cache* get_cached_arp_entry(struct sr_instance* sr, uint8_t * p, s
 struct sr_if* get_router_interface(struct sr_instance*);
 struct sr_if* get_best_if_match(struct sr_instance*, struct in_addr);
 struct sr_rt* get_best_rt_match(struct sr_instance*, struct in_addr);
-
-
+void add_packet_to_buffer(struct sr_instance*, uint8_t*);
+void handle_buffered_packets(struct sr_instance*, uint32_t);
+int packets_for_ip_are_buffered(struct sr_instance*, uint32_t);
 
 #endif /* SR_ROUTER_H */
