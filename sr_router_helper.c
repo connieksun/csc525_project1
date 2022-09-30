@@ -84,16 +84,16 @@ struct sr_if* get_router_interface(struct sr_instance* sr) {
 struct sr_if* get_best_if_match(struct sr_instance* sr, struct in_addr ip) {
 	char best_if[SR_IFACE_NAMELEN];
 	best_if[0] = 0;
-	struct in_addr best_ip;
+	struct in_addr best_mask;
 	struct sr_rt* rout_table = sr->routing_table;
 	while (rout_table) { // search all locations to send
-		if ((ip.s_addr && rout_table->mask.s_addr) == (rout_table->dest.s_addr && rout_table->mask.s_addr)) { // if we have a match
+		if ((ip.s_addr & rout_table->mask.s_addr) == (rout_table->dest.s_addr & rout_table->mask.s_addr)) { // if we have a match
 			if (!best_if[0]) { // if no previous match, set match
-				best_ip = rout_table->dest;
+				best_mask = rout_table->mask;
 				memcpy(best_if, rout_table->interface, SR_IFACE_NAMELEN);
 			} else { // else if we do have a match already
-				if (abs(best_ip.s_addr - ip.s_addr) > abs(rout_table->dest.s_addr - ip.s_addr)) { // see if it's a better match
-					best_ip = rout_table->dest;
+				if (rout_table->mask.s_addr > best_mask.s_addr) { // see if it's a better match
+					best_mask = rout_table->mask;
 					memcpy(best_if, rout_table->interface, SR_IFACE_NAMELEN); // update
 				}
 			}
@@ -117,18 +117,18 @@ struct sr_rt* get_best_rt_match(struct sr_instance* sr, struct in_addr ip) {
 	char best_if[SR_IFACE_NAMELEN];
 	best_if[0] = 0;
 	struct sr_rt* best_route = NULL;
-	struct in_addr best_ip;
+	struct in_addr best_mask;
 	struct sr_rt* rout_table = sr->routing_table;
 	while (rout_table) { // search all locations to send
-		if ((ip.s_addr && rout_table->mask.s_addr) == (rout_table->dest.s_addr && rout_table->mask.s_addr)) { // if we have a match
+		if ((ip.s_addr & rout_table->mask.s_addr) == (rout_table->dest.s_addr & rout_table->mask.s_addr)) { // if we have a match
 			if (!best_if[0]) { // if no previous match, set match
 				best_route = rout_table;
-				best_ip = rout_table->dest;
+				best_mask = rout_table->mask;
 				memcpy(best_if, rout_table->interface, SR_IFACE_NAMELEN);
 			} else { // else if we do have a match already
-				if (abs(best_ip.s_addr - ip.s_addr) > abs(rout_table->dest.s_addr - ip.s_addr)) { // see if it's a better match
+				if (rout_table->mask.s_addr > best_mask.s_addr) { // see if it's a better match
 					best_route = rout_table;
-					best_ip = rout_table->dest;
+					best_mask = rout_table->mask;
 					memcpy(best_if, rout_table->interface, SR_IFACE_NAMELEN); // update
 				}
 			}
